@@ -7,9 +7,8 @@ from pathlib import Path
 
 import razorpay
 from django.conf import settings
-from django.db.models import Prefetch
 
-from .models import ApplicantSession, Category, Cutoff, CutoffMetric, Payment, Program
+from .models import ApplicantSession, Category, Cutoff, CutoffMetric, Institute, Payment, Program
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -180,19 +179,29 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
     queryset = Program.objects.filter(is_active=True)
     if not include_interdisciplinary:
         queryset = queryset.filter(branch_code=branch)
+    programs = list(queryset)
+    if not programs:
+        return []
 
-    programs = (
-        queryset.select_related("institute")
-        .prefetch_related(Prefetch("cutoffs", queryset=Cutoff.objects.filter(category=category).order_by("-year")))
-    )
+    institute_ids = {program.institute_id for program in programs}
+    institute_map = {institute.id: institute for institute in Institute.objects.filter(id__in=list(institute_ids))}
+
+    program_ids = [program.id for program in programs]
+    cutoffs_by_program = {}
+    cutoff_rows = Cutoff.objects.filter(category=category, program_id__in=program_ids).order_by("program_id", "-year")
+    for cutoff in cutoff_rows:
+        cutoffs_by_program.setdefault(cutoff.program_id, []).append(cutoff)
 
     results = []
     for program in programs:
-        cutoffs = list(program.cutoffs.all())
+        cutoffs = cutoffs_by_program.get(program.id, [])
         if not cutoffs:
             continue
         eligible, match_type, eligibility_note = _program_match(program, branch, include_interdisciplinary)
         if not eligible:
+            continue
+        institute = institute_map.get(program.institute_id)
+        if not institute:
             continue
         latest = cutoffs[0]
         probability = _probability(score, latest.min_score, latest.max_score, latest.metric_type)
@@ -208,10 +217,10 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
         ]
         results.append(
             {
-                "iit": program.institute.name,
-                "acronym": program.institute.acronym,
-                "city": program.institute.city,
-                "state": program.institute.state,
+                "iit": institute.name,
+                "acronym": institute.acronym,
+                "city": institute.city,
+                "state": institute.state,
                 "program": program.name,
                 "degree": program.degree,
                 "branch": program.branch_code,
@@ -226,7 +235,7 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
                 "recommendation_score": (
                     PROBABILITY_WEIGHT[probability] * 100
                     + MATCH_TYPE_WEIGHT.get(match_type, 0)
-                    + program.institute.preference_score
+                    + institute.preference_score
                 ),
             }
         )
@@ -315,7 +324,7 @@ def mark_payment_success(attempt_id, razorpay_order_id, razorpay_payment_id, raz
     if not verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
         return False, "Payment signature verification failed."
 
-    payment = Payment.objects.select_related("applicant_session").get(
+    payment = Payment.objects.get(
         applicant_session_id=attempt_id,
         razorpay_order_id=razorpay_order_id,
     )

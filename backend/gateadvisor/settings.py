@@ -1,7 +1,6 @@
 from pathlib import Path
 import os
 
-import dj_database_url
 from dotenv import load_dotenv
 
 
@@ -18,9 +17,9 @@ ALLOWED_HOSTS = [
 ]
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
+    "gateadvisor.apps.MongoAdminConfig",
+    "gateadvisor.apps.MongoAuthConfig",
+    "gateadvisor.apps.MongoContentTypesConfig",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
@@ -63,10 +62,11 @@ TEMPLATES = [
 WSGI_APPLICATION = "gateadvisor.wsgi.application"
 
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-    )
+    "default": {
+        "ENGINE": "django_mongodb_backend",
+        "HOST": os.getenv("MONGODB_URI", "mongodb://localhost:27017"),
+        "NAME": os.getenv("MONGODB_NAME", "test_userss"),
+    }
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -85,7 +85,13 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+DEFAULT_AUTO_FIELD = "django_mongodb_backend.fields.ObjectIdAutoField"
+MIGRATION_MODULES = {
+    "admin": "mongo_migrations.admin",
+    "auth": "mongo_migrations.auth",
+    "contenttypes": "mongo_migrations.contenttypes",
+    "admissions": "mongo_migrations.admissions",
+}
 
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
