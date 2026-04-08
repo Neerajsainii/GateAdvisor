@@ -74,6 +74,112 @@ const contactProfile = {
   github: "github.com/yourhandle",
 };
 
+const infoPageLinks = [
+  { label: "Privacy Policy", href: "/?page=privacy-policy", path: "/privacy-policy" },
+  { label: "Terms & Conditions", href: "/?page=terms-and-conditions", path: "/terms-and-conditions" },
+  { label: "Contact Us", href: "/?page=contact-us", path: "/contact-us" },
+  { label: "Refund Policy", href: "/?page=refund-policy", path: "/refund-policy" },
+];
+
+const infoPages = {
+  "/privacy-policy": {
+    title: "Privacy Policy",
+    subtitle: "How we collect, use, and protect your data on GATE Advisor.",
+    sections: [
+      {
+        heading: "Data We Collect",
+        body: "We may collect your GATE score, branch, category, optional rank, email, account details, and payment reference data required to deliver your results and unlock access.",
+      },
+      {
+        heading: "How Data Is Used",
+        body: "Your data is used to generate eligibility predictions, personalize recommendations, manage account access, and support payment verification and customer support.",
+      },
+      {
+        heading: "Data Sharing",
+        body: "We do not sell your personal data. Payment processing is handled through Razorpay and only necessary payment metadata is stored for order verification and transaction records.",
+      },
+      {
+        heading: "Retention & Security",
+        body: "We retain data only as needed for product usage, analytics, and legal compliance. Reasonable technical and operational safeguards are used to protect stored information.",
+      },
+      {
+        heading: "Your Controls",
+        body: "You can contact us to request profile updates or account-related support. For privacy concerns, reach us directly via the email listed on the Contact Us page.",
+      },
+    ],
+  },
+  "/terms-and-conditions": {
+    title: "Terms & Conditions",
+    subtitle: "Terms for using GATE Advisor services and paid unlock features.",
+    sections: [
+      {
+        heading: "Service Scope",
+        body: "GATE Advisor provides decision-support insights based on historical cutoff data and configured matching logic. Results are advisory and do not guarantee admission.",
+      },
+      {
+        heading: "User Responsibility",
+        body: "Users are responsible for entering accurate details. Incorrect or incomplete information may lead to inaccurate predictions and recommendations.",
+      },
+      {
+        heading: "Payments and Access",
+        body: "Paid plans unlock enhanced results for the selected duration. Access is intended for personal use only and must not be resold, shared, or redistributed.",
+      },
+      {
+        heading: "Acceptable Use",
+        body: "You agree not to abuse, scrape, reverse engineer, or disrupt platform operations. Fraudulent payment activity may result in access suspension.",
+      },
+      {
+        heading: "Liability Limitation",
+        body: "The platform is provided on an as-is basis. We are not liable for admission outcomes, third-party counseling decisions, or losses caused by external systems.",
+      },
+    ],
+  },
+  "/refund-policy": {
+    title: "Refund Policy",
+    subtitle: "Policy for payment disputes, duplicate charges, and refund requests.",
+    sections: [
+      {
+        heading: "Digital Service Nature",
+        body: "GATE Advisor provides instant digital access to paid insights. Because benefits are delivered immediately, completed unlocks are generally non-refundable.",
+      },
+      {
+        heading: "Eligible Refund Cases",
+        body: "Refunds may be considered for duplicate payments or technically failed transactions where amount is captured but access is not granted.",
+      },
+      {
+        heading: "Request Window",
+        body: "Refund requests should be raised within 7 calendar days of transaction date with payment reference details for verification.",
+      },
+      {
+        heading: "Processing Timeline",
+        body: "Once approved, refunds are initiated to the original payment method. Bank/card/network processing can take 5 to 7 business days.",
+      },
+      {
+        heading: "Support Contact",
+        body: "For refund help, use the email in Contact Us with your order ID, payment ID, date, and registered email.",
+      },
+    ],
+  },
+  "/contact-us": {
+    title: "Contact Us",
+    subtitle: "Reach out for support, refunds, or freelance full-stack project inquiries.",
+    sections: [
+      {
+        heading: "General Support",
+        body: "For product issues, account access, result mismatch reports, or payment verification support, contact us through email.",
+      },
+      {
+        heading: "Freelance Projects",
+        body: "Need a similar product, dashboard, automation, or payment integration for your business or startup? Contact us to discuss scope, timeline, and commercials.",
+      },
+      {
+        heading: "Response SLA",
+        body: "We generally respond within 24 to 48 hours on business days.",
+      },
+    ],
+  },
+};
+
 function formatRupees(amount) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -138,6 +244,16 @@ const probabilityTone = {
 };
 
 function App() {
+  const pathname =
+    typeof window !== "undefined"
+      ? ((window.location.pathname || "/").replace(/\/+$/, "") || "/").toLowerCase()
+      : "/";
+  const queryPage =
+    typeof window !== "undefined"
+      ? (new window.URLSearchParams(window.location.search).get("page") || "").toLowerCase()
+      : "";
+  const queryPath = queryPage ? `/${queryPage.replace(/^\/+/, "")}` : "";
+  const activeInfoPage = infoPages[pathname] || infoPages[queryPath] || null;
   const restoredResultState = readStoredJson(storageKeys.results, null);
   const [metadata, setMetadata] = useState(fallbackMetadata);
   const [form, setForm] = useState(() => ({ ...defaultForm, ...readStoredJson(storageKeys.form, {}) }));
@@ -161,10 +277,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (activeInfoPage) {
+      return;
+    }
     api.get("/metadata/").then((response) => setMetadata(response.data)).catch(() => setMetadata(fallbackMetadata));
-  }, []);
+  }, [activeInfoPage]);
 
   useEffect(() => {
+    if (activeInfoPage) {
+      return;
+    }
     api.get("/auth/me/")
       .then((response) => {
         setCurrentUser(response.data.user);
@@ -174,13 +296,16 @@ function App() {
         setAuthToken("");
         setCurrentUser(null);
       });
-  }, []);
+  }, [activeInfoPage]);
 
   useEffect(() => {
+    if (activeInfoPage) {
+      return;
+    }
     if (restoredAttemptId) {
       refreshResults(restoredAttemptId).catch(() => null);
     }
-  }, [refreshResults, restoredAttemptId]);
+  }, [activeInfoPage, refreshResults, restoredAttemptId]);
 
   useEffect(() => {
     writeStoredJson(storageKeys.form, form);
@@ -355,6 +480,10 @@ function App() {
     } finally {
       setUnlocking(false);
     }
+  }
+
+  if (activeInfoPage) {
+    return <InfoPage page={activeInfoPage} />;
   }
   return (
     <main className="min-h-screen overflow-hidden bg-[#07111f] text-white">
@@ -948,6 +1077,68 @@ function PlanModal({ plans, unlocking, onClose, onSelectPlan }) {
   );
 }
 
+function InfoPage({ page }) {
+  return (
+    <main className="min-h-screen overflow-hidden bg-[#07111f] text-white">
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+      <section className="relative mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-10">
+        <nav className="glass-panel flex items-center justify-between rounded-full px-5 py-3">
+          <span className="text-sm font-semibold tracking-[0.32em] text-cyan-100">GATE ADVISOR</span>
+          <a href="/" className="secondary-button">
+            Back to Home
+          </a>
+        </nav>
+
+        <div className="glass-panel mt-8 rounded-[2rem] p-6 sm:p-8">
+          <h1 className="text-3xl font-semibold sm:text-4xl">{page.title}</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-200/75">{page.subtitle}</p>
+
+          <div className="mt-8 space-y-4">
+            {page.sections.map((section) => (
+              <div key={section.heading} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <h2 className="text-lg font-semibold">{section.heading}</h2>
+                <p className="mt-2 text-sm leading-7 text-slate-200/75">{section.body}</p>
+              </div>
+            ))}
+          </div>
+
+          {page.title === "Contact Us" ? (
+            <div className="mt-8 grid gap-3 text-sm text-slate-200/75 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-300/65">Email</div>
+                <a className="mt-2 block font-medium text-cyan-100" href={`mailto:${contactProfile.email}`}>
+                  {contactProfile.email}
+                </a>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-300/65">Social</div>
+                <div className="mt-2 grid gap-1">
+                  <span>{contactProfile.instagram}</span>
+                  <span>{contactProfile.linkedin}</span>
+                  <span>{contactProfile.github}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-8 flex flex-wrap gap-3 border-t border-white/10 pt-6">
+            {infoPageLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-100/85"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function Footer() {
   return (
     <footer className="relative mx-auto max-w-7xl px-5 pb-10 sm:px-8 lg:px-10">
@@ -980,7 +1171,18 @@ function Footer() {
             </div>
           </div>
         </div>
-        <div className="mt-8 border-t border-white/10 pt-5 text-sm text-slate-300/60">
+        <div className="mt-6 flex flex-wrap gap-3 border-t border-white/10 pt-5">
+          {infoPageLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-100/85"
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+        <div className="mt-5 text-sm text-slate-300/60">
           Copyright {new Date().getFullYear()} {contactProfile.owner}. All rights reserved.
         </div>
       </div>

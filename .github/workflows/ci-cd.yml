@@ -74,7 +74,7 @@ jobs:
 
       - name: Lint and build frontend
         env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'http://localhost:8000/api' }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://gate-advisor-backend.azurewebsites.net/api' }}
         run: |
           npm run lint
           npm run build

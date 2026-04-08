@@ -1,6 +1,10 @@
 import axios from "axios";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+const DEFAULT_API_BASE_URL = import.meta.env.PROD
+  ? "https://gate-advisor-backend.azurewebsites.net/api"
+  : "http://localhost:8000/api";
+
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 export const AUTH_TOKEN_STORAGE_KEY = "gate_advisor_auth_token";
 
 export const api = axios.create({
