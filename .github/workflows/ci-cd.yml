@@ -45,7 +45,14 @@ jobs:
       - name: Package backend
         if: github.event_name == 'push'
         run: |
-          zip -r ../backend.zip . -x "*.git*" "db.sqlite3" "__pycache__/*"
+          zip -r ../backend.zip . \
+            -x "*.git*" \
+            -x ".venv/*" \
+            -x "__pycache__/*" \
+            -x "*.pyc" \
+            -x ".pytest_cache/*" \
+            -x "db.sqlite3" \
+            -x ".env"
 
       - name: Deploy backend to Azure Web App
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.AZURE_BACKEND_WEBAPP_NAME != '' && env.AZURE_BACKEND_PUBLISH_PROFILE != ''

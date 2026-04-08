@@ -67,11 +67,11 @@ const fallbackMetadata = {
 };
 
 const contactProfile = {
-  owner: "Your Name",
-  email: "yourmail@example.com",
-  instagram: "@yourhandle",
-  linkedin: "linkedin.com/in/yourhandle",
-  github: "github.com/yourhandle",
+  owner: "Neeraj Saini",
+  email: "sainineeraj123789@gmail.com",
+  instagram: "@mei.neeru",
+  linkedin: "linkedin.com/in/neeraj-saini-414546310/",
+  github: "github.com/Neerajsainii",
 };
 
 const infoPageLinks = [
