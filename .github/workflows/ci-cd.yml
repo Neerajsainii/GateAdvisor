@@ -8,6 +8,11 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
     env:
       AZURE_BACKEND_WEBAPP_NAME: ${{ secrets.AZURE_BACKEND_WEBAPP_NAME }}
       AZURE_BACKEND_PUBLISH_PROFILE: ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
@@ -30,7 +35,10 @@ jobs:
         env:
           DJANGO_SECRET_KEY: ci-secret
           DJANGO_DEBUG: "true"
+          MONGODB_URI: mongodb://127.0.0.1:27017/gateadvisor_ci
+          MONGODB_NAME: gateadvisor_ci
         run: |
+          python manage.py migrate --noinput
           python manage.py check
           python manage.py test
 
