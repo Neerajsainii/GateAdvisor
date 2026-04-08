@@ -31,7 +31,7 @@ from .throttles import PaymentThrottle, ResultsThrottle
 
 def serialize_user(user):
     return {
-        "id": user.id,
+        "id": str(user.id),
         "full_name": user.first_name or user.get_full_name() or user.username,
         "email": user.email,
     }
