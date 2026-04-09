@@ -10,7 +10,7 @@ export const AUTH_TOKEN_STORAGE_KEY = "gate_advisor_auth_token";
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Token ${localStorage.getItem("token")}`,
     "Content-Type": "application/json",
   },
 });
