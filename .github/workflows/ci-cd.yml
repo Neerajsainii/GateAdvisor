@@ -42,7 +42,6 @@ jobs:
       # CHANGE 1: zip only the backend folder contents for deploy
       - name: Zip backend for deployment
         run: |
-          cd backend
           zip -r ../backend_deploy.zip . -x "*.pyc" -x "__pycache__/*" -x ".git/*"
 
       - name: Deploy backend to Azure Web App
