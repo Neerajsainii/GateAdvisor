@@ -15,6 +15,7 @@ export default [
       globals: {
         document: "readonly",
         window: "readonly",
+        localStorage: "readonly",
       },
       parserOptions: {
         ecmaFeatures: {
