@@ -389,9 +389,16 @@ function App() {
         authMode === "signup"
           ? authForm
           : { email: authForm.email, password: authForm.password };
-      const response = await api.post(endpoint, payload);
-      setAuthToken(response.data.token);
-      setCurrentUser(response.data.user);
+const response = await api.post(endpoint, payload);
+
+// ✅ STEP 2: Save token in localStorage
+localStorage.setItem("token", response.data.token);
+
+// ✅ STEP 3: Update axios immediately
+api.defaults.headers.Authorization = `Token ${response.data.token}`;
+
+setAuthToken(response.data.token);
+setCurrentUser(response.data.user);
       setForm((current) => ({ ...current, email: current.email || response.data.user.email || "" }));
       setShowAuthModal(false);
       setShowPlans(true);
