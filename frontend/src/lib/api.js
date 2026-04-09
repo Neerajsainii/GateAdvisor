@@ -10,9 +10,20 @@ export const AUTH_TOKEN_STORAGE_KEY = "gate_advisor_auth_token";
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-      Authorization: `Token ${localStorage.getItem("token")}`,
     "Content-Type": "application/json",
   },
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    config.headers.Authorization = `Token ${token}`;
+  } else {
+    delete config.headers.Authorization;
+  }
+
+  return config;
 });
 
 function readStoredToken() {
