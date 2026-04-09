@@ -14,7 +14,7 @@ ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
-]
+] + ["169.254.130.4"]  # Azure internal health probe
 
 INSTALLED_APPS = [
     "gateadvisor.apps.MongoAdminConfig",
