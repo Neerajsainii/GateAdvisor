@@ -604,10 +604,10 @@ function Hero({ onStart }) {
       <div className="mb-5 inline-flex rounded-full border border-cyan-200/20 bg-cyan-200/10 px-4 py-2 text-sm text-cyan-100">
         Decision support for GATE-qualified applicants
       </div>
-      <h1 className="max-w-3xl text-5xl font-semibold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
+      <h1 className="max-w-3xl text-3xl font-semibold leading-tight tracking-tight sm:text-5xl lg:text-7xl">
         Find the best IIT you can get with your GATE score
       </h1>
-      <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200/80">
+      <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200/80 sm:text-lg sm:leading-8">
         Enter your score, branch, and category to see eligible IIT M.Tech programs, indicative cutoffs,
         probability bands, and COAP application guidance in one flow.
       </p>
@@ -652,7 +652,7 @@ function CheckerCard({ metadata, form, setForm, loading, onSubmit, error }) {
     >
       <div className="mb-6">
         <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Step-based checker</p>
-        <h2 className="mt-2 text-3xl font-semibold">Get your free preview</h2>
+        <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">Get your free preview</h2>
         <p className="mt-2 text-sm text-slate-200/70">No login required. Unlock the full list only if it helps.</p>
       </div>
 
@@ -758,12 +758,12 @@ function ResultsSection({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-      <aside className="glass-panel h-fit rounded-[2rem] p-6">
+      <aside className="glass-panel order-2 h-fit rounded-[2rem] p-5 sm:p-6 lg:order-1">
         <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Dashboard</p>
-        <h2 className="mt-2 text-3xl font-semibold">
+        <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
           {isPaid ? "Full ranked results" : "Free preview"}
         </h2>
-        <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <Metric label="Matches" value={resultState.total_matches} />
           <Metric label="Visible" value={resultState.results.length} />
           <Metric label="Locked" value={resultState.locked_count} />
@@ -777,7 +777,7 @@ function ResultsSection({
         </div>
 
         {!isPaid ? (
-          <div className="mt-6 rounded-3xl border border-cyan-200/20 bg-cyan-200/10 p-5">
+          <div className="mt-6 hidden rounded-3xl border border-cyan-200/20 bg-cyan-200/10 p-5 lg:block">
             <h3 className="font-semibold">Choose a plan to unlock everything</h3>
             <p className="mt-2 text-sm leading-6 text-slate-200/70">
               Open the plan popup to pick weekly, monthly, or yearly access to full results and guidance.
@@ -791,7 +791,7 @@ function ResultsSection({
         <Guidance guidance={resultState.guidance} isPaid={isPaid} />
       </aside>
 
-      <div className="relative">
+      <div className="relative order-1 lg:order-2">
         {groupedResults.length > 0 ? (
           <div className="grid gap-6">
             {groupedResults.map((group) => (
@@ -814,12 +814,25 @@ function ResultsSection({
         )}
 
         {!isPaid && resultState.locked_count > 0 ? (
-          <div className="glass-panel pointer-events-none mt-4 rounded-[2rem] p-8 text-center">
+          <div className="glass-panel mt-4 rounded-[2rem] p-5 text-center sm:p-8">
             <div className="mx-auto mb-4 h-20 max-w-xl rounded-3xl border border-white/10 bg-white/10 blur-sm" />
-            <h3 className="text-2xl font-semibold">More programs are waiting</h3>
-            <p className="mt-2 text-slate-200/70">
+            <h3 className="text-xl font-semibold sm:text-2xl">More programs are waiting</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-200/70 sm:text-base">
               {resultState.locked_count} additional IIT and M.Tech matches are blurred until payment is verified.
             </p>
+            <div className="mx-auto mt-5 max-w-md rounded-3xl border border-cyan-200/20 bg-cyan-200/10 p-4 text-left lg:hidden">
+              <h4 className="font-semibold text-white">Unlock the full list</h4>
+              <p className="mt-2 text-sm leading-6 text-slate-200/75">
+                Choose a plan to view all remaining matches, filters, and guidance details.
+              </p>
+              <button
+                onClick={onUnlock}
+                className="primary-button mt-4 w-full justify-center"
+                disabled={unlocking}
+              >
+                {unlocking ? "Opening payment..." : "Unlock Full List"}
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
@@ -830,7 +843,7 @@ function ResultsSection({
 function Metric({ label, value }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-center">
-      <div className="text-2xl font-semibold">{value}</div>
+      <div className="text-xl font-semibold sm:text-2xl">{value}</div>
       <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">{label}</div>
     </div>
   );
@@ -852,7 +865,7 @@ function SelectFilter({ label, value, onChange, options }) {
 function ResultCard({ result }) {
   return (
     <motion.article
-      className="glass-panel rounded-[2rem] p-6"
+      className="glass-panel rounded-[2rem] p-4 sm:p-6"
       layout
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -861,11 +874,11 @@ function ResultCard({ result }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-sm text-cyan-100/75">{result.acronym} - {result.city}</div>
-          <h3 className="mt-1 text-2xl font-semibold">{result.iit}</h3>
-          <p className="mt-2 text-slate-200/75">{result.degree} in {result.program}</p>
+          <h3 className="mt-1 text-xl font-semibold sm:text-2xl">{result.iit}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-200/75 sm:text-base">{result.degree} in {result.program}</p>
           <p className="mt-2 text-sm text-slate-300/70">{result.match_type} match. {result.eligibility_note}</p>
         </div>
-        <span className={`rounded-full border px-4 py-2 text-sm ${probabilityTone[result.admission_probability] || probabilityTone.Reach}`}>
+        <span className={`rounded-full border px-3 py-2 text-xs sm:px-4 sm:text-sm ${probabilityTone[result.admission_probability] || probabilityTone.Reach}`}>
           {result.admission_probability === "Marks-based" ? "Marks-based cutoff" : `${result.admission_probability} probability`}
         </span>
       </div>
