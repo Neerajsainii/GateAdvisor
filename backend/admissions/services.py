@@ -323,8 +323,8 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
     return sorted(
         results,
         key=lambda item: (
-            -PROBABILITY_WEIGHT[item["admission_probability"]],
             item["cutoff_distance"],
+            -PROBABILITY_WEIGHT[item["admission_probability"]],
             -MATCH_TYPE_WEIGHT.get(item["match_type"], 0),
             -item["recommendation_score"],
             item["iit"],
