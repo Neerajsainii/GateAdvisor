@@ -247,6 +247,23 @@ class AdmissionsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_create_order_without_attempt_uses_latest_user_attempt(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        self.client.post(
+            "/api/results/preview/",
+            {"gate_score": 760, "branch": "CS", "category": "GENERAL"},
+            format="json",
+        )
+
+        response = self.client.post(
+            "/api/payments/create-order/",
+            {"plan_code": "custom", "custom_days": 12},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["order"]["plan"]["custom_days"], 12)
+
     def test_signup_and_me(self):
         signup_client = APIClient()
         signup = signup_client.post(

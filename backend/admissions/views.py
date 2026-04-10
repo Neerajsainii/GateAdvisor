@@ -147,9 +147,22 @@ class CreateOrderView(APIView):
     def post(self, request):
         serializer = CreateOrderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        attempt = get_object_or_404(ApplicantSession, id=serializer.validated_data["attempt_id"])
+        attempt_id = serializer.validated_data.get("attempt_id")
+        if attempt_id:
+            attempt = get_object_or_404(ApplicantSession, id=attempt_id)
+        else:
+            attempt = request.user.applicant_sessions.order_by("-updated_at").first()
+            if attempt is None:
+                return Response(
+                    {"message": "Generate a preview first, then choose a subscription plan."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         attach_attempt_to_user(attempt, request.user)
-        order = create_payment_order(attempt, serializer.validated_data["plan_code"])
+        order = create_payment_order(
+            attempt,
+            serializer.validated_data["plan_code"],
+            serializer.validated_data.get("custom_days"),
+        )
         return Response({"order": order})
 
 
@@ -234,7 +247,7 @@ def razorpay_webhook(request):
                 active_subscription = active_subscription_for_user(payment.applicant_session.user)
                 if active_subscription and active_subscription["expires_at"] > base_start:
                     base_start = active_subscription["expires_at"]
-            expires_at = base_start + subscription_duration(payment.plan_code)
+            expires_at = base_start + subscription_duration(payment.plan_code, payment.subscription_days)
             payment.status = Payment.Status.PAID
             payment.razorpay_payment_id = payment_id
             payment.subscription_started_at = base_start

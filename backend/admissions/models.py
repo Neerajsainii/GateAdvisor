@@ -125,6 +125,7 @@ class Payment(models.Model):
     razorpay_signature = models.CharField(max_length=256, blank=True)
     amount_paise = models.PositiveIntegerField(default=1000)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.CREATED)
+    subscription_days = models.PositiveIntegerField(null=True, blank=True)
     subscription_started_at = models.DateTimeField(null=True, blank=True)
     subscription_expires_at = models.DateTimeField(null=True, blank=True)
     raw_payload = models.JSONField(default=dict, blank=True)

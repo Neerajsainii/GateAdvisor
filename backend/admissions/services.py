@@ -134,16 +134,21 @@ def metadata_payload():
         "currency": "INR",
         "razorpay_key_id": settings.RAZORPAY_KEY_ID,
         "subscription_plans": subscription_plans_payload(),
+        "custom_subscription_daily_price_paise": settings.CUSTOM_SUBSCRIPTION_DAILY_PRICE_PAISE,
     }
 
 
-def subscription_duration(plan_code):
+def subscription_duration(plan_code, custom_days=None):
+    if plan_code == "custom":
+        return timedelta(days=custom_days or 1)
     return timedelta(days=PLAN_DURATION_DAYS.get(plan_code, 7))
 
 
 def payment_subscription_window(payment):
     started_at = payment.subscription_started_at or payment.updated_at or payment.created_at
-    expires_at = payment.subscription_expires_at or (started_at + subscription_duration(payment.plan_code))
+    expires_at = payment.subscription_expires_at or (
+        started_at + subscription_duration(payment.plan_code, payment.subscription_days)
+    )
     return started_at, expires_at
 
 
@@ -355,18 +360,33 @@ def _receipt_id(applicant_session):
     return f"gate{applicant_session.id.hex[:20]}"
 
 
-def create_payment_order(applicant_session, plan_code):
-    plan = settings.SUBSCRIPTION_PLANS[plan_code]
-    amount = plan["amount_paise"]
+def create_payment_order(applicant_session, plan_code, custom_days=None):
+    if plan_code == "custom":
+        amount = custom_days * settings.CUSTOM_SUBSCRIPTION_DAILY_PRICE_PAISE
+        plan = {
+            "code": "custom",
+            "title": f"{custom_days}-Day Extension",
+            "subtitle": "Custom extension for active access",
+            "duration_label": f"{custom_days} days added",
+            "amount_paise": amount,
+            "original_amount_paise": amount,
+            "discount_label": "",
+            "recommended": False,
+            "custom_days": custom_days,
+        }
+    else:
+        plan = settings.SUBSCRIPTION_PLANS[plan_code]
+        amount = plan["amount_paise"]
     client = _razorpay_client()
     if client is None:
         order_id = f"order_mock_{uuid.uuid4().hex[:16]}"
         Payment.objects.create(
             applicant_session=applicant_session,
             plan_code=plan_code,
+            subscription_days=custom_days if plan_code == "custom" else None,
             razorpay_order_id=order_id,
             amount_paise=amount,
-            raw_payload={"mode": "development_mock", "plan": plan_code},
+            raw_payload={"mode": "development_mock", "plan": plan_code, "custom_days": custom_days},
         )
         return {
             "id": order_id,
@@ -375,6 +395,7 @@ def create_payment_order(applicant_session, plan_code):
             "development_mode": True,
             "key_id": settings.RAZORPAY_KEY_ID,
             "plan": plan,
+            "attempt_id": str(applicant_session.id),
         }
 
     order = client.order.create(
@@ -383,17 +404,28 @@ def create_payment_order(applicant_session, plan_code):
             "currency": "INR",
             "receipt": _receipt_id(applicant_session),
             "payment_capture": 1,
-            "notes": {"attempt_id": str(applicant_session.id), "plan_code": plan_code},
+            "notes": {
+                "attempt_id": str(applicant_session.id),
+                "plan_code": plan_code,
+                "custom_days": str(custom_days or ""),
+            },
         }
     )
     Payment.objects.create(
         applicant_session=applicant_session,
         plan_code=plan_code,
+        subscription_days=custom_days if plan_code == "custom" else None,
         razorpay_order_id=order["id"],
         amount_paise=amount,
         raw_payload=order,
     )
-    return {**order, "development_mode": False, "key_id": settings.RAZORPAY_KEY_ID, "plan": plan}
+    return {
+        **order,
+        "development_mode": False,
+        "key_id": settings.RAZORPAY_KEY_ID,
+        "plan": plan,
+        "attempt_id": str(applicant_session.id),
+    }
 
 
 def verify_payment_signature(order_id, payment_id, signature):
@@ -427,7 +459,7 @@ def mark_payment_success(attempt_id, razorpay_order_id, razorpay_payment_id, raz
         active_subscription = active_subscription_for_user(payment.applicant_session.user)
         if active_subscription and active_subscription["expires_at"] > base_start:
             base_start = active_subscription["expires_at"]
-    subscription_expires_at = base_start + subscription_duration(payment.plan_code)
+    subscription_expires_at = base_start + subscription_duration(payment.plan_code, payment.subscription_days)
     payment.razorpay_payment_id = razorpay_payment_id
     payment.razorpay_signature = razorpay_signature
     payment.status = Payment.Status.PAID
@@ -440,6 +472,7 @@ def mark_payment_success(attempt_id, razorpay_order_id, razorpay_payment_id, raz
             "razorpay_payment_id",
             "razorpay_signature",
             "status",
+            "subscription_days",
             "subscription_started_at",
             "subscription_expires_at",
             "raw_payload",

@@ -24,8 +24,18 @@ class ApplicantSessionSerializer(serializers.ModelSerializer):
 
 
 class CreateOrderSerializer(serializers.Serializer):
-    attempt_id = serializers.UUIDField()
-    plan_code = serializers.ChoiceField(choices=["weekly", "monthly", "yearly"])
+    attempt_id = serializers.UUIDField(required=False, allow_null=True)
+    plan_code = serializers.ChoiceField(choices=["weekly", "monthly", "yearly", "custom"])
+    custom_days = serializers.IntegerField(min_value=1, max_value=3650, required=False, allow_null=True)
+
+    def validate(self, attrs):
+        plan_code = attrs["plan_code"]
+        custom_days = attrs.get("custom_days")
+        if plan_code == "custom" and not custom_days:
+            raise serializers.ValidationError({"custom_days": "Enter the number of days to add."})
+        if plan_code != "custom":
+            attrs["custom_days"] = None
+        return attrs
 
 
 class VerifyPaymentSerializer(serializers.Serializer):
