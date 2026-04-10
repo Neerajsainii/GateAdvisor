@@ -73,11 +73,13 @@ class AdmissionsApiTests(TestCase):
             institute=close_institute,
             name="Close Program",
             branch_code="CS",
+            is_active=True,
         )
         far_program = Program.objects.create(
             institute=far_institute,
             name="Far Program",
             branch_code="CS",
+            is_active=True,
         )
         Cutoff.objects.create(
             program=close_program,
