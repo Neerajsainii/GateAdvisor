@@ -379,6 +379,7 @@ function App() {
     setShowPlans(true);
   }
 
+  
   async function submitAuth(event) {
     event.preventDefault();
     setAuthError("");
