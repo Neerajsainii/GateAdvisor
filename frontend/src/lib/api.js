@@ -15,7 +15,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = readStoredToken();
 
   if (token) {
     config.headers.Authorization = `Token ${token}`;
@@ -28,15 +28,21 @@ function readStoredToken() {
   if (typeof window === "undefined") {
     return "";
   }
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+  return (
+    window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ||
+    window.localStorage.getItem("token") ||
+    ""
+  );
 }
 
 export function setAuthToken(token) {
   if (typeof window !== "undefined") {
     if (token) {
       window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+      window.localStorage.removeItem("token");
     } else {
       window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem("token");
     }
   }
 

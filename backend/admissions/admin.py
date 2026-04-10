@@ -32,6 +32,14 @@ class ApplicantSessionAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("razorpay_order_id", "status", "amount_paise", "applicant_session", "created_at")
+    list_display = (
+        "razorpay_order_id",
+        "status",
+        "plan_code",
+        "amount_paise",
+        "subscription_expires_at",
+        "applicant_session",
+        "created_at",
+    )
     list_filter = ("status",)
     readonly_fields = ("created_at", "updated_at")

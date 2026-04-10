@@ -390,16 +390,9 @@ function App() {
         authMode === "signup"
           ? authForm
           : { email: authForm.email, password: authForm.password };
-const response = await api.post(endpoint, payload);
-
-// ✅ STEP 2: Save token in localStorage
-localStorage.setItem("token", response.data.token);
-
-// ✅ STEP 3: Update axios immediately
-api.defaults.headers.Authorization = `Token ${response.data.token}`;
-
-setAuthToken(response.data.token);
-setCurrentUser(response.data.user);
+      const response = await api.post(endpoint, payload);
+      setAuthToken(response.data.token);
+      setCurrentUser(response.data.user);
       setForm((current) => ({ ...current, email: current.email || response.data.user.email || "" }));
       setShowAuthModal(false);
       setShowPlans(true);
@@ -929,169 +922,176 @@ function AuthModal({
   onSubmit,
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020817]/75 px-5 backdrop-blur-md">
-      <form onSubmit={onSubmit} className="glass-panel w-full max-w-xl rounded-[2rem] p-6 sm:p-8">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Account</p>
-            <h3 className="mt-2 text-3xl font-semibold">
-              {authMode === "signup" ? "Create your account" : "Login to continue"}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-200/70">
-              Free preview stays open for everyone. Login is required before payment and full unlock.
-            </p>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#020817]/75 px-4 py-4 backdrop-blur-md sm:px-5 sm:py-6">
+      <div className="flex min-h-full items-start justify-center sm:items-center">
+        <form
+          onSubmit={onSubmit}
+          className="glass-panel my-4 max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-[2rem] p-6 sm:max-h-[calc(100vh-3rem)] sm:p-8"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Account</p>
+              <h3 className="mt-2 text-3xl font-semibold">
+                {authMode === "signup" ? "Create your account" : "Login to continue"}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-200/70">
+                Free preview stays open for everyone. Login is required before payment and full unlock.
+              </p>
+            </div>
+            <button type="button" onClick={onClose} className="secondary-button shrink-0">
+              Close
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="secondary-button">
-            Close
-          </button>
-        </div>
 
-        <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={() => onChangeMode("login")}
-            className={authMode === "login" ? "primary-button flex-1" : "secondary-button flex-1"}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            onClick={() => onChangeMode("signup")}
-            className={authMode === "signup" ? "primary-button flex-1" : "secondary-button flex-1"}
-          >
-            Sign Up
-          </button>
-        </div>
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={() => onChangeMode("login")}
+              className={authMode === "login" ? "primary-button flex-1" : "secondary-button flex-1"}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeMode("signup")}
+              className={authMode === "signup" ? "primary-button flex-1" : "secondary-button flex-1"}
+            >
+              Sign Up
+            </button>
+          </div>
 
-        <div className="mt-6 grid gap-4">
-          {authMode === "signup" ? (
+          <div className="mt-6 grid gap-4">
+            {authMode === "signup" ? (
+              <label className="field">
+                <span>Full name</span>
+                <input
+                  type="text"
+                  required
+                  value={authForm.full_name}
+                  onChange={(event) => onFieldChange("full_name", event.target.value)}
+                  placeholder="Your name"
+                />
+              </label>
+            ) : null}
+
             <label className="field">
-              <span>Full name</span>
+              <span>Email</span>
               <input
-                type="text"
+                type="email"
                 required
-                value={authForm.full_name}
-                onChange={(event) => onFieldChange("full_name", event.target.value)}
-                placeholder="Your name"
+                value={authForm.email}
+                onChange={(event) => onFieldChange("email", event.target.value)}
+                placeholder="you@example.com"
               />
             </label>
+
+            <label className="field">
+              <span>Password</span>
+              <input
+                type="password"
+                required
+                minLength="8"
+                value={authForm.password}
+                onChange={(event) => onFieldChange("password", event.target.value)}
+                placeholder="Minimum 8 characters"
+              />
+            </label>
+          </div>
+
+          {authError ? (
+            <p className="mt-4 rounded-2xl border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">
+              {authError}
+            </p>
           ) : null}
 
-          <label className="field">
-            <span>Email</span>
-            <input
-              type="email"
-              required
-              value={authForm.email}
-              onChange={(event) => onFieldChange("email", event.target.value)}
-              placeholder="you@example.com"
-            />
-          </label>
-
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              required
-              minLength="8"
-              value={authForm.password}
-              onChange={(event) => onFieldChange("password", event.target.value)}
-              placeholder="Minimum 8 characters"
-            />
-          </label>
-        </div>
-
-        {authError ? (
-          <p className="mt-4 rounded-2xl border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">
-            {authError}
-          </p>
-        ) : null}
-
-        <button className="primary-button mt-6 w-full justify-center" disabled={authLoading}>
-          {authLoading
-            ? "Please wait..."
-            : authMode === "signup"
-              ? "Create account and continue"
-              : "Login and continue"}
-        </button>
-      </form>
+          <button className="primary-button mt-6 w-full justify-center" disabled={authLoading}>
+            {authLoading
+              ? "Please wait..."
+              : authMode === "signup"
+                ? "Create account and continue"
+                : "Login and continue"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
 
 function PlanModal({ plans, unlocking, onClose, onSelectPlan }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020817]/75 px-5 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-5xl rounded-[2rem] p-6 sm:p-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Unlock full list</p>
-            <h3 className="mt-2 text-3xl font-semibold">Choose your access plan</h3>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200/70">
-              Weekly and yearly plans carry the current discount. Monthly stays at the regular price.
-            </p>
-          </div>
-          <button onClick={onClose} className="secondary-button" disabled={unlocking}>
-            Close
-          </button>
-        </div>
-
-        <div className="mt-8 grid gap-4 lg:grid-cols-3">
-          {plans.map((plan) => (
-            <div
-              key={plan.code}
-              className={`rounded-[2rem] border p-6 ${
-                plan.recommended
-                  ? "border-cyan-300/40 bg-cyan-300/10 shadow-[0_20px_70px_rgba(34,211,238,0.12)]"
-                  : "border-white/10 bg-white/5"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h4 className="text-xl font-semibold">{plan.title}</h4>
-                  <p className="mt-1 text-sm text-slate-200/70">{plan.subtitle}</p>
-                </div>
-                {plan.recommended ? (
-                  <span className="rounded-full border border-cyan-200/30 bg-cyan-200/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
-                    Best Value
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="mt-6">
-                <div className="flex items-end gap-3">
-                  <span className="text-4xl font-semibold">{formatRupees(plan.display_amount)}</span>
-                  {plan.discount_label ? (
-                    <span className="pb-1 text-base text-slate-300/55 line-through">
-                      {formatRupees(plan.display_original_amount)}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-2 flex items-center gap-3">
-                  <span className="text-sm text-slate-200/70">{plan.duration_label}</span>
-                  {plan.discount_label ? (
-                    <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100">
-                      {plan.discount_label}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <ul className="mt-6 space-y-3 text-sm text-slate-200/75">
-                <li>Full ranked IIT and M.Tech result list</li>
-                <li>Direct, allied, and interdisciplinary visibility</li>
-                <li>Guidance timeline and cutoff insights</li>
-              </ul>
-
-              <button
-                onClick={() => onSelectPlan(plan.code)}
-                className="primary-button mt-8 w-full justify-center"
-                disabled={unlocking}
-              >
-                {unlocking ? "Starting payment..." : `Continue with ${plan.title}`}
-              </button>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#020817]/75 px-4 py-4 backdrop-blur-md sm:px-5 sm:py-6">
+      <div className="flex min-h-full items-start justify-center sm:items-center">
+        <div className="glass-panel my-4 max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto rounded-[2rem] p-5 sm:max-h-[calc(100vh-3rem)] sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Unlock full list</p>
+              <h3 className="mt-2 text-3xl font-semibold">Choose your access plan</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200/70">
+                Weekly and yearly plans carry the current discount. Monthly stays at the regular price.
+              </p>
             </div>
-          ))}
+            <button onClick={onClose} className="secondary-button shrink-0" disabled={unlocking}>
+              Close
+            </button>
+          </div>
+
+          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+            {plans.map((plan) => (
+              <div
+                key={plan.code}
+                className={`rounded-[2rem] border p-6 ${
+                  plan.recommended
+                    ? "border-cyan-300/40 bg-cyan-300/10 shadow-[0_20px_70px_rgba(34,211,238,0.12)]"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-xl font-semibold">{plan.title}</h4>
+                    <p className="mt-1 text-sm text-slate-200/70">{plan.subtitle}</p>
+                  </div>
+                  {plan.recommended ? (
+                    <span className="rounded-full border border-cyan-200/30 bg-cyan-200/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                      Best Value
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-6">
+                  <div className="flex items-end gap-3">
+                    <span className="text-4xl font-semibold">{formatRupees(plan.display_amount)}</span>
+                    {plan.discount_label ? (
+                      <span className="pb-1 text-base text-slate-300/55 line-through">
+                        {formatRupees(plan.display_original_amount)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="text-sm text-slate-200/70">{plan.duration_label}</span>
+                    {plan.discount_label ? (
+                      <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100">
+                        {plan.discount_label}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <ul className="mt-6 space-y-3 text-sm text-slate-200/75">
+                  <li>Full ranked IIT and M.Tech result list</li>
+                  <li>Direct, allied, and interdisciplinary visibility</li>
+                  <li>Guidance timeline and cutoff insights</li>
+                </ul>
+
+                <button
+                  onClick={() => onSelectPlan(plan.code)}
+                  className="primary-button mt-8 w-full justify-center"
+                  disabled={unlocking}
+                >
+                  {unlocking ? "Starting payment..." : `Continue with ${plan.title}`}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from .models import ApplicantSession, Category, Cutoff, Institute, Program
+from .models import ApplicantSession, Category, Cutoff, Institute, Payment, Program
 
 
 @override_settings(DEBUG=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
@@ -106,6 +109,79 @@ class AdmissionsApiTests(TestCase):
 
         self.assertEqual(verify.status_code, 200)
         self.assertTrue(ApplicantSession.objects.get(id=attempt_id).is_paid)
+
+    def test_active_subscription_unlocks_new_previews_for_same_account(self):
+        preview = self.client.post(
+            "/api/results/preview/",
+            {"gate_score": 760, "branch": "CS", "category": "GENERAL"},
+            format="json",
+        )
+        attempt_id = preview.data["attempt"]["id"]
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        order = self.client.post(
+            "/api/payments/create-order/",
+            {"attempt_id": attempt_id, "plan_code": "weekly"},
+            format="json",
+        )
+        self.client.post(
+            "/api/payments/verify/",
+            {
+                "attempt_id": attempt_id,
+                "razorpay_order_id": order.data["order"]["id"],
+                "razorpay_payment_id": "pay_mock_new_preview",
+                "razorpay_signature": "debug",
+            },
+            format="json",
+        )
+
+        second_preview = self.client.post(
+            "/api/results/preview/",
+            {"gate_score": 720, "branch": "BT", "category": "GENERAL"},
+            format="json",
+        )
+
+        self.assertEqual(second_preview.status_code, 201)
+        self.assertTrue(second_preview.data["attempt"]["is_paid"])
+        self.assertEqual(second_preview.data["locked_count"], 0)
+
+    def test_expired_subscription_locks_future_previews(self):
+        preview = self.client.post(
+            "/api/results/preview/",
+            {"gate_score": 760, "branch": "CS", "category": "GENERAL"},
+            format="json",
+        )
+        attempt_id = preview.data["attempt"]["id"]
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        order = self.client.post(
+            "/api/payments/create-order/",
+            {"attempt_id": attempt_id, "plan_code": "weekly"},
+            format="json",
+        )
+        self.client.post(
+            "/api/payments/verify/",
+            {
+                "attempt_id": attempt_id,
+                "razorpay_order_id": order.data["order"]["id"],
+                "razorpay_payment_id": "pay_mock_expired",
+                "razorpay_signature": "debug",
+            },
+            format="json",
+        )
+
+        payment = Payment.objects.get(razorpay_order_id=order.data["order"]["id"])
+        payment.subscription_expires_at = timezone.now() - timedelta(minutes=1)
+        payment.save(update_fields=["subscription_expires_at", "updated_at"])
+
+        expired_preview = self.client.post(
+            "/api/results/preview/",
+            {"gate_score": 710, "branch": "CS", "category": "GENERAL"},
+            format="json",
+        )
+
+        self.assertEqual(expired_preview.status_code, 201)
+        self.assertFalse(expired_preview.data["attempt"]["is_paid"])
 
     def test_create_order_requires_login(self):
         preview = self.client.post(

@@ -2,11 +2,13 @@ import csv
 import hashlib
 import hmac
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import razorpay
 from django.conf import settings
+from django.utils import timezone
 
 from .models import ApplicantSession, Category, Cutoff, CutoffMetric, Institute, Payment, Program
 
@@ -80,6 +82,12 @@ PROGRAM_ELIGIBILITY_RULES = {
     "Robotics and AI": {"CS", "EE", "EC", "IN", "ME"},
 }
 
+PLAN_DURATION_DAYS = {
+    "weekly": 7,
+    "monthly": 30,
+    "yearly": 365,
+}
+
 
 def guidance_payload():
     return {
@@ -127,6 +135,63 @@ def metadata_payload():
         "razorpay_key_id": settings.RAZORPAY_KEY_ID,
         "subscription_plans": subscription_plans_payload(),
     }
+
+
+def subscription_duration(plan_code):
+    return timedelta(days=PLAN_DURATION_DAYS.get(plan_code, 7))
+
+
+def payment_subscription_window(payment):
+    started_at = payment.subscription_started_at or payment.updated_at or payment.created_at
+    expires_at = payment.subscription_expires_at or (started_at + subscription_duration(payment.plan_code))
+    return started_at, expires_at
+
+
+def active_subscription_for_user(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    now = timezone.now()
+    paid_payments = (
+        Payment.objects.filter(applicant_session__user=user, status=Payment.Status.PAID)
+        .select_related("applicant_session")
+        .order_by("-subscription_expires_at", "-updated_at")
+    )
+
+    active_subscription = None
+    for payment in paid_payments:
+        started_at, expires_at = payment_subscription_window(payment)
+        fields_to_update = []
+        if payment.subscription_started_at is None:
+            payment.subscription_started_at = started_at
+            fields_to_update.append("subscription_started_at")
+        if payment.subscription_expires_at is None:
+            payment.subscription_expires_at = expires_at
+            fields_to_update.append("subscription_expires_at")
+        if fields_to_update:
+            payment.save(update_fields=[*fields_to_update, "updated_at"])
+        if expires_at > now and (
+            active_subscription is None or expires_at > active_subscription["expires_at"]
+        ):
+            active_subscription = {
+                "plan_code": payment.plan_code,
+                "started_at": started_at,
+                "expires_at": expires_at,
+                "payment_id": payment.id,
+            }
+    return active_subscription
+
+
+def user_has_active_subscription(user):
+    return active_subscription_for_user(user) is not None
+
+
+def sync_attempt_access(attempt):
+    has_access = user_has_active_subscription(attempt.user) if attempt.user_id else False
+    if attempt.is_paid != has_access:
+        attempt.is_paid = has_access
+        attempt.save(update_fields=["is_paid", "updated_at"])
+    return has_access
 
 
 def csv_cutoff_rows():
@@ -255,6 +320,7 @@ def create_attempt(validated_data, user=None):
         attempt_data["user"] = user
         if not attempt_data.get("email"):
             attempt_data["email"] = user.email
+        attempt_data["is_paid"] = user_has_active_subscription(user)
     return ApplicantSession.objects.create(results_snapshot=results, **attempt_data)
 
 
@@ -328,15 +394,40 @@ def mark_payment_success(attempt_id, razorpay_order_id, razorpay_payment_id, raz
         applicant_session_id=attempt_id,
         razorpay_order_id=razorpay_order_id,
     )
+    if (
+        payment.status == Payment.Status.PAID
+        and payment.subscription_expires_at
+        and payment.razorpay_payment_id == razorpay_payment_id
+    ):
+        return True, "Subscription is already active."
+
+    base_start = timezone.now()
+    if payment.applicant_session.user_id:
+        active_subscription = active_subscription_for_user(payment.applicant_session.user)
+        if active_subscription and active_subscription["expires_at"] > base_start:
+            base_start = active_subscription["expires_at"]
+    subscription_expires_at = base_start + subscription_duration(payment.plan_code)
     payment.razorpay_payment_id = razorpay_payment_id
     payment.razorpay_signature = razorpay_signature
     payment.status = Payment.Status.PAID
+    payment.subscription_started_at = base_start
+    payment.subscription_expires_at = subscription_expires_at
     if payload:
         payment.raw_payload = payload
-    payment.save(update_fields=["razorpay_payment_id", "razorpay_signature", "status", "raw_payload", "updated_at"])
+    payment.save(
+        update_fields=[
+            "razorpay_payment_id",
+            "razorpay_signature",
+            "status",
+            "subscription_started_at",
+            "subscription_expires_at",
+            "raw_payload",
+            "updated_at",
+        ]
+    )
 
     ApplicantSession.objects.filter(id=attempt_id).update(is_paid=True)
-    return True, "Payment verified and full results unlocked."
+    return True, "Payment verified and subscription activated."
 
 
 def verify_webhook_signature(raw_body, signature):
