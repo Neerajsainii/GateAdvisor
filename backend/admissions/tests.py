@@ -54,6 +54,55 @@ class AdmissionsApiTests(TestCase):
         self.assertEqual(len(response.data["results"]), 3)
         self.assertEqual(response.data["locked_count"], 2)
 
+    def test_preview_orders_results_by_closest_cutoff_within_probability_band(self):
+        close_institute = Institute.objects.create(
+            name="IIT Close",
+            acronym="IITCLOSE",
+            city="Near City",
+            state="Near State",
+            preference_score=20,
+        )
+        far_institute = Institute.objects.create(
+            name="IIT Far",
+            acronym="IITFAR",
+            city="Far City",
+            state="Far State",
+            preference_score=95,
+        )
+        close_program = Program.objects.create(
+            institute=close_institute,
+            name="Close Program",
+            branch_code="CS",
+        )
+        far_program = Program.objects.create(
+            institute=far_institute,
+            name="Far Program",
+            branch_code="CS",
+        )
+        Cutoff.objects.create(
+            program=close_program,
+            category=Category.GENERAL,
+            year=2025,
+            min_score=530,
+            max_score=540,
+        )
+        Cutoff.objects.create(
+            program=far_program,
+            category=Category.GENERAL,
+            year=2025,
+            min_score=580,
+            max_score=590,
+        )
+
+        response = self.client.post(
+            "/api/results/preview/",
+            {"gate_score": 450, "branch": "CS", "category": "GENERAL"},
+            format="json",
+        )
+
+        result_names = [row["program"] for row in response.data["results"]]
+        self.assertLess(result_names.index("Close Program"), result_names.index("Far Program"))
+
     def test_interdisciplinary_toggle_includes_cross_branch_programs(self):
         preview = self.client.post(
             "/api/results/preview/",

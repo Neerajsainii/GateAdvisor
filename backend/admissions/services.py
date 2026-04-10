@@ -219,6 +219,15 @@ def _probability(score, min_score, max_score, metric_type=CutoffMetric.SCORE):
     return "Reach"
 
 
+def _cutoff_distance(score, min_score, max_score):
+    score_decimal = Decimal(score)
+    if min_score <= score_decimal <= max_score:
+        return Decimal("0")
+    if score_decimal < min_score:
+        return min_score - score_decimal
+    return score_decimal - max_score
+
+
 def _match_type(selected_branch, program_branch):
     if selected_branch == program_branch:
         return "Direct"
@@ -270,6 +279,7 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
             continue
         latest = cutoffs[0]
         probability = _probability(score, latest.min_score, latest.max_score, latest.metric_type)
+        cutoff_distance = _cutoff_distance(score, latest.min_score, latest.max_score)
         historical = [
             {
                 "year": cutoff.year,
@@ -296,6 +306,7 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
                 "cutoff_metric": latest.metric_type,
                 "cutoff_metric_label": CutoffMetric(latest.metric_type).label,
                 "admission_probability": probability,
+                "cutoff_distance": float(cutoff_distance),
                 "historical_data": historical,
                 "recommendation_score": (
                     PROBABILITY_WEIGHT[probability] * 100
@@ -304,7 +315,17 @@ def ranked_results(score, branch, category, include_interdisciplinary=True):
                 ),
             }
         )
-    return sorted(results, key=lambda item: item["recommendation_score"], reverse=True)
+    return sorted(
+        results,
+        key=lambda item: (
+            -PROBABILITY_WEIGHT[item["admission_probability"]],
+            item["cutoff_distance"],
+            -MATCH_TYPE_WEIGHT.get(item["match_type"], 0),
+            -item["recommendation_score"],
+            item["iit"],
+            item["program"],
+        ),
+    )
 
 
 def create_attempt(validated_data, user=None):

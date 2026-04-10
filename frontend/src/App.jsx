@@ -199,6 +199,16 @@ const defaultForm = {
 
 const defaultFilters = { institute: "All", probability: "All", branch: "All", matchType: "All" };
 const defaultAuthForm = { full_name: "", email: "", password: "" };
+const authSuccessActions = {
+  none: "none",
+  openPlans: "openPlans",
+};
+const navItems = [
+  { label: "Home", target: "home" },
+  { label: "Dashboard", target: "results" },
+  { label: "Profile", target: "profile" },
+  { label: "Settings", target: "settings" },
+];
 const storageKeys = {
   form: "gate_advisor_form",
   filters: "gate_advisor_filters",
@@ -265,6 +275,8 @@ function App() {
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState(defaultAuthForm);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authSuccessAction, setAuthSuccessAction] = useState(authSuccessActions.none);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(() => readStoredJson(storageKeys.user, null));
   const [error, setError] = useState("");
   const [authError, setAuthError] = useState("");
@@ -323,6 +335,19 @@ function App() {
     writeStoredJson(storageKeys.user, currentUser);
   }, [currentUser]);
 
+  function scrollToSection(sectionId) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setMobileNavOpen(false);
+  }
+
+  function openAuthModal(mode) {
+    setMobileNavOpen(false);
+    setAuthSuccessAction(authSuccessActions.none);
+    setAuthMode(mode);
+    setAuthError("");
+    setShowAuthModal(true);
+  }
+
   const allResults = useMemo(() => resultState?.results || [], [resultState]);
   const institutes = useMemo(
     () => ["All", ...Array.from(new Set(allResults.map((result) => result.acronym)))],
@@ -370,13 +395,45 @@ function App() {
       setError("Please generate a preview before unlocking.");
       return;
     }
+    setMobileNavOpen(false);
     if (!currentUser) {
+      setAuthSuccessAction(authSuccessActions.openPlans);
       setAuthMode("login");
       setAuthError("");
       setShowAuthModal(true);
       return;
     }
     setShowPlans(true);
+  }
+
+  function handleSubscriptionCta() {
+    setMobileNavOpen(false);
+
+    if (!currentUser) {
+      setAuthSuccessAction(authSuccessActions.none);
+      setAuthMode("login");
+      setAuthError("");
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (currentUser.subscription) {
+      if (resultState?.attempt?.id) {
+        setShowPlans(true);
+      } else {
+        scrollToSection("settings");
+      }
+      return;
+    }
+
+    if (resultState?.attempt?.id) {
+      setShowPlans(true);
+      scrollToSection("results");
+      return;
+    }
+
+    setError("Generate a preview first, then choose a subscription plan.");
+    document.getElementById("checker")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   
@@ -395,7 +452,8 @@ function App() {
       setCurrentUser(response.data.user);
       setForm((current) => ({ ...current, email: current.email || response.data.user.email || "" }));
       setShowAuthModal(false);
-      setShowPlans(true);
+      setShowPlans(authSuccessAction === authSuccessActions.openPlans);
+      setAuthSuccessAction(authSuccessActions.none);
       setAuthForm((current) => ({ ...defaultAuthForm, email: current.email }));
     } catch (requestError) {
       const responseError = requestError.response?.data;
@@ -421,7 +479,20 @@ function App() {
     }
     setAuthToken("");
     setCurrentUser(null);
+    setForm(defaultForm);
+    setFilters(defaultFilters);
+    setResultState(null);
     setShowPlans(false);
+    setShowAuthModal(false);
+    setMobileNavOpen(false);
+    setAuthSuccessAction(authSuccessActions.none);
+    setAuthForm(defaultAuthForm);
+    setAuthError("");
+    setError("");
+    writeStoredJson(storageKeys.form, null);
+    writeStoredJson(storageKeys.filters, null);
+    writeStoredJson(storageKeys.results, null);
+    writeStoredJson(storageKeys.user, null);
   }
 
   async function unlockResults(planCode) {
@@ -491,13 +562,21 @@ function App() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
 
-      <section className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6 sm:px-8 lg:px-10">
-        <nav className="glass-panel flex items-center justify-between rounded-full px-5 py-3">
-          <span className="text-sm font-semibold tracking-[0.32em] text-cyan-100">GATE ADVISOR</span>
-          <div className="flex items-center gap-3">
+      <section id="home" className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-8 sm:py-6 lg:px-10">
+        <nav className="glass-panel flex items-center justify-between rounded-[1.75rem] px-4 py-3 sm:rounded-full sm:px-5">
+          <button
+            type="button"
+            onClick={() => scrollToSection("home")}
+            className="min-w-0 text-left"
+          >
+            <div className="text-xs font-semibold tracking-[0.32em] text-cyan-100">GATE ADVISOR</div>
+            <div className="mt-1 hidden text-xs text-slate-300/70 sm:block">Admission guidance portal</div>
+          </button>
+
+          <div className="hidden items-center gap-3 md:flex">
             {currentUser ? (
               <>
-                <div className="hidden text-right sm:block">
+                <div className="hidden text-right lg:block">
                   <div className="text-sm font-medium text-white">{currentUser.full_name}</div>
                   <div className="text-xs text-slate-300/70">{currentUser.email}</div>
                 </div>
@@ -507,33 +586,116 @@ function App() {
               </>
             ) : (
               <>
-                <button
-                  onClick={() => {
-                    setAuthMode("login");
-                    setAuthError("");
-                    setShowAuthModal(true);
-                  }}
-                  className="secondary-button"
-                >
+                <button onClick={() => openAuthModal("login")} className="secondary-button">
                   Login
                 </button>
-                <button
-                  onClick={() => {
-                    setAuthMode("signup");
-                    setAuthError("");
-                    setShowAuthModal(true);
-                  }}
-                  className="primary-button"
-                >
+                <button onClick={() => openAuthModal("signup")} className="primary-button">
                   Sign Up
                 </button>
               </>
             )}
-            <a href="#results" className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80">
+            <button
+              type="button"
+              onClick={() => scrollToSection("results")}
+              className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10"
+            >
               Dashboard
-            </a>
+            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="secondary-button min-h-0 px-3 py-2 text-sm md:hidden"
+            aria-label="Open menu"
+          >
+            Menu
+          </button>
         </nav>
+
+        {mobileNavOpen ? (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-[#020817]/70 backdrop-blur-sm"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close menu overlay"
+            />
+            <div className="absolute right-0 top-0 flex h-full w-[84vw] max-w-sm flex-col border-l border-white/10 bg-[#07111f]/95 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold tracking-[0.32em] text-cyan-100">MENU</div>
+                  <div className="mt-1 text-sm text-slate-300/70">
+                    {currentUser ? currentUser.full_name : "Browse the portal"}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="secondary-button min-h-0 px-3 py-2 text-sm"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-2">
+                {navItems.map((item) => (
+                  <button
+                    key={item.target}
+                    type="button"
+                    onClick={() => scrollToSection(item.target)}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white/85"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {currentUser ? (
+                <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 text-sm">
+                  <div className="font-medium text-white">{currentUser.full_name}</div>
+                  <div className="mt-1 text-xs text-slate-300/70">{currentUser.email}</div>
+                  {currentUser.subscription ? (
+                    <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100">
+                      {currentUser.subscription.plan_code} plan active
+                    </div>
+                  ) : (
+                    <button onClick={handleSubscriptionCta} className="primary-button mt-4 w-full justify-center">
+                      Buy Subscription
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200/80">
+                  <div className="font-medium text-white">Account</div>
+                  <p className="mt-2 text-xs leading-6 text-slate-300/75">
+                    Login or sign up to unlock paid results and keep access tied to your account.
+                  </p>
+                  <div className="mt-4 grid gap-3">
+                    <button onClick={() => openAuthModal("login")} className="secondary-button w-full justify-center">
+                      Login
+                    </button>
+                    <button onClick={() => openAuthModal("signup")} className="primary-button w-full justify-center">
+                      Sign Up
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-auto pt-6">
+                {currentUser ? (
+                  <button onClick={logout} className="secondary-button w-full justify-center">
+                    Logout
+                  </button>
+                ) : (
+                  <button onClick={handleSubscriptionCta} className="secondary-button w-full justify-center">
+                    Buy Subscription
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid flex-1 items-center gap-8 py-14 lg:grid-cols-[1.05fr_0.95fr]">
           <Hero onStart={() => document.getElementById("checker")?.scrollIntoView({ behavior: "smooth" })} />
@@ -560,6 +722,45 @@ function App() {
           onUnlock={openPlans}
         />
       </section>
+      <section id="profile" className="relative mx-auto max-w-7xl px-5 pb-8 sm:px-8 lg:px-10">
+        <div className="glass-panel rounded-[2rem] p-5 sm:p-6">
+          <div className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Profile</div>
+          {currentUser ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-300/60">Name</div>
+                <div className="mt-2 font-medium text-white">{currentUser.full_name}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-300/60">Email</div>
+                <div className="mt-2 font-medium text-white">{currentUser.email}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <button onClick={() => openAuthModal("login")} className="secondary-button">
+                Login
+              </button>
+              <button onClick={() => openAuthModal("signup")} className="primary-button">
+                Sign Up
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+      <section id="settings" className="relative mx-auto max-w-7xl px-5 pb-8 sm:px-8 lg:px-10">
+        <div className="glass-panel rounded-[2rem] p-5 sm:p-6">
+          <div className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Settings</div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200/80">
+              Saved filters and results stay on this device until logout.
+            </div>
+            <button onClick={handleSubscriptionCta} className="secondary-button w-full justify-center">
+              {currentUser?.subscription ? "Manage Subscription" : "Buy Subscription"}
+            </button>
+          </div>
+        </div>
+      </section>
       <Footer />
       {showAuthModal ? (
         <AuthModal
@@ -574,6 +775,7 @@ function App() {
           onClose={() => {
             setShowAuthModal(false);
             setAuthError("");
+            setAuthSuccessAction(authSuccessActions.none);
           }}
           onFieldChange={(field, value) => setAuthForm((current) => ({ ...current, [field]: value }))}
           onSubmit={submitAuth}
