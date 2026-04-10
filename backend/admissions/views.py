@@ -2,6 +2,7 @@ import json
 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions, status
 from rest_framework.authtoken.models import Token
@@ -19,21 +20,34 @@ from .serializers import (
     VerifyPaymentSerializer,
 )
 from .services import (
+    active_subscription_for_user,
     create_attempt,
     create_payment_order,
     guidance_payload,
     mark_payment_success,
     metadata_payload,
+    subscription_duration,
+    sync_attempt_access,
     verify_webhook_signature,
 )
 from .throttles import PaymentThrottle, ResultsThrottle
 
 
 def serialize_user(user):
+    active_subscription = active_subscription_for_user(user)
     return {
         "id": str(user.id),
         "full_name": user.first_name or user.get_full_name() or user.username,
         "email": user.email,
+        "subscription": (
+            {
+                "plan_code": active_subscription["plan_code"],
+                "started_at": active_subscription["started_at"],
+                "expires_at": active_subscription["expires_at"],
+            }
+            if active_subscription
+            else None
+        ),
     }
 
 
@@ -49,6 +63,7 @@ def attach_attempt_to_user(attempt, user):
         updates.append("email")
     if updates:
         attempt.save(update_fields=[*updates, "updated_at"])
+    sync_attempt_access(attempt)
     return attempt
 
 
@@ -75,7 +90,8 @@ class ResultsPreviewView(APIView):
         serializer = PreviewRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         attempt = create_attempt(serializer.validated_data, request.user)
-        preview = attempt.results_snapshot[:3]
+        is_paid = sync_attempt_access(attempt)
+        preview = attempt.results_snapshot if is_paid else attempt.results_snapshot[:3]
         return Response(
             {
                 "attempt": {
@@ -84,10 +100,10 @@ class ResultsPreviewView(APIView):
                     "branch": attempt.branch,
                     "category": attempt.category,
                     "rank": attempt.rank,
-                    "is_paid": attempt.is_paid,
+                    "is_paid": is_paid,
                 },
                 "results": preview,
-                "locked_count": max(len(attempt.results_snapshot) - len(preview), 0),
+                "locked_count": 0 if is_paid else max(len(attempt.results_snapshot) - len(preview), 0),
                 "total_matches": len(attempt.results_snapshot),
                 "guidance": guidance_payload(),
             },
@@ -99,9 +115,12 @@ class ResultsDetailView(APIView):
     throttle_classes = [ResultsThrottle]
     throttle_scope = "results"
 
-    def get(self, _request, attempt_id):
+    def get(self, request, attempt_id):
         attempt = get_object_or_404(ApplicantSession, id=attempt_id)
-        results = attempt.results_snapshot if attempt.is_paid else attempt.results_snapshot[:3]
+        if request.user.is_authenticated:
+            attach_attempt_to_user(attempt, request.user)
+        is_paid = sync_attempt_access(attempt)
+        results = attempt.results_snapshot if is_paid else attempt.results_snapshot[:3]
         return Response(
             {
                 "attempt": {
@@ -110,10 +129,10 @@ class ResultsDetailView(APIView):
                     "branch": attempt.branch,
                     "category": attempt.category,
                     "rank": attempt.rank,
-                    "is_paid": attempt.is_paid,
+                    "is_paid": is_paid,
                 },
                 "results": results,
-                "locked_count": 0 if attempt.is_paid else max(len(attempt.results_snapshot) - len(results), 0),
+                "locked_count": 0 if is_paid else max(len(attempt.results_snapshot) - len(results), 0),
                 "total_matches": len(attempt.results_snapshot),
                 "guidance": guidance_payload(),
             }
@@ -204,10 +223,33 @@ def razorpay_webhook(request):
     if payload.get("event") == "payment.captured" and order_id and payment_id:
         payment = Payment.objects.filter(razorpay_order_id=order_id).first()
         if payment:
+            if (
+                payment.status == Payment.Status.PAID
+                and payment.subscription_expires_at
+                and payment.razorpay_payment_id == payment_id
+            ):
+                return JsonResponse({"ok": True})
+            base_start = timezone.now()
+            if payment.applicant_session.user_id:
+                active_subscription = active_subscription_for_user(payment.applicant_session.user)
+                if active_subscription and active_subscription["expires_at"] > base_start:
+                    base_start = active_subscription["expires_at"]
+            expires_at = base_start + subscription_duration(payment.plan_code)
             payment.status = Payment.Status.PAID
             payment.razorpay_payment_id = payment_id
+            payment.subscription_started_at = base_start
+            payment.subscription_expires_at = expires_at
             payment.raw_payload = payload
-            payment.save(update_fields=["status", "razorpay_payment_id", "raw_payload", "updated_at"])
+            payment.save(
+                update_fields=[
+                    "status",
+                    "razorpay_payment_id",
+                    "subscription_started_at",
+                    "subscription_expires_at",
+                    "raw_payload",
+                    "updated_at",
+                ]
+            )
             ApplicantSession.objects.filter(id=payment.applicant_session_id).update(is_paid=True)
 
     return JsonResponse({"ok": True})
