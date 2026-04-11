@@ -80,3 +80,17 @@ class LoginSerializer(serializers.Serializer):
         attrs["user"] = user
         attrs["email"] = email
         return attrs
+
+
+class AdminLoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(max_length=128, write_only=True)
+
+    def validate(self, attrs):
+        username = attrs["username"].strip()
+        user = authenticate(username=username, password=attrs["password"])
+        if not user or not user.is_staff:
+            raise serializers.ValidationError("Invalid credentials or access denied.")
+        attrs["user"] = user
+        return attrs
+
