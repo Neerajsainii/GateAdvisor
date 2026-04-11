@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, loadRazorpayScript, setAuthToken } from "./lib/api";
+import gateAdvisorLogo from "./assets/gate-advisor-logo.jpeg";
 
 const fallbackMetadata = {
   branches: [
@@ -26,6 +27,7 @@ const fallbackMetadata = {
   ],
   unlock_amount: 1000,
   razorpay_key_id: "",
+  custom_subscription_daily_price_paise: 500,
   subscription_plans: [
     {
       code: "weekly",
@@ -44,10 +46,10 @@ const fallbackMetadata = {
       title: "Monthly Pass",
       subtitle: "Steady prep companion",
       duration_label: "30 days access",
-      amount_paise: 4900,
-      original_amount_paise: 4900,
-      display_amount: 49,
-      display_original_amount: 49,
+      amount_paise: 34900,
+      original_amount_paise: 34900,
+      display_amount: 349,
+      display_original_amount: 349,
       discount_label: "",
       recommended: false,
     },
@@ -56,10 +58,10 @@ const fallbackMetadata = {
       title: "Yearly Pass",
       subtitle: "Best value for full prep",
       duration_label: "365 days access",
-      amount_paise: 9900,
-      original_amount_paise: 99900,
-      display_amount: 99,
-      display_original_amount: 999,
+      amount_paise: 44900,
+      original_amount_paise: 449000,
+      display_amount: 449,
+      display_original_amount: 4490,
       discount_label: "90% OFF",
       recommended: true,
     },
@@ -186,6 +188,33 @@ function formatRupees(amount) {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatSubscriptionDate(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function BrandLogo({ compact = false }) {
+  return (
+    <div className={`overflow-hidden rounded-2xl bg-white/95 ${compact ? "w-36 sm:w-40" : "w-40 sm:w-52 lg:w-64"}`}>
+      <img
+        src={gateAdvisorLogo}
+        alt="GATE Advisor"
+        className="block h-auto w-full object-contain"
+      />
+    </div>
+  );
 }
 
 const defaultForm = {
@@ -364,6 +393,7 @@ function App() {
       return instituteMatch && probabilityMatch && branchMatch && matchTypeMatch;
     });
   }, [allResults, filters]);
+  const currentAttemptId = resultState?.attempt?.id || restoredAttemptId || null;
 
   async function submitPreview(event) {
     event.preventDefault();
@@ -391,7 +421,7 @@ function App() {
   }
 
   function openPlans() {
-    if (!resultState?.attempt?.id) {
+    if (!currentAttemptId) {
       setError("Please generate a preview before unlocking.");
       return;
     }
@@ -410,30 +440,14 @@ function App() {
     setMobileNavOpen(false);
 
     if (!currentUser) {
-      setAuthSuccessAction(authSuccessActions.none);
+      setAuthSuccessAction(authSuccessActions.openPlans);
       setAuthMode("login");
       setAuthError("");
       setShowAuthModal(true);
       return;
     }
 
-    if (currentUser.subscription) {
-      if (resultState?.attempt?.id) {
-        setShowPlans(true);
-      } else {
-        scrollToSection("settings");
-      }
-      return;
-    }
-
-    if (resultState?.attempt?.id) {
-      setShowPlans(true);
-      scrollToSection("results");
-      return;
-    }
-
-    setError("Generate a preview first, then choose a subscription plan.");
-    document.getElementById("checker")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setShowPlans(true);
   }
 
   
@@ -495,24 +509,33 @@ function App() {
     writeStoredJson(storageKeys.user, null);
   }
 
-  async function unlockResults(planCode) {
+  async function unlockResults(planCode, customDays = null) {
     setError("");
     setUnlocking(true);
     try {
-      const orderResponse = await api.post("/payments/create-order/", {
-        attempt_id: resultState.attempt.id,
-        plan_code: planCode,
-      });
+      const orderPayload = { plan_code: planCode };
+      if (currentAttemptId) {
+        orderPayload.attempt_id = currentAttemptId;
+      }
+      if (customDays) {
+        orderPayload.custom_days = customDays;
+      }
+      const orderResponse = await api.post("/payments/create-order/", orderPayload);
       const order = orderResponse.data.order;
+      const orderAttemptId = order.attempt_id || currentAttemptId;
 
       if (order.development_mode || !order.key_id) {
         await api.post("/payments/verify/", {
-          attempt_id: resultState.attempt.id,
+          attempt_id: orderAttemptId,
           razorpay_order_id: order.id,
           razorpay_payment_id: "pay_mock_development",
           razorpay_signature: "debug",
         });
-        await refreshResults(resultState.attempt.id);
+        if (orderAttemptId) {
+          await refreshResults(orderAttemptId);
+        }
+        const meResponse = await api.get("/auth/me/");
+        setCurrentUser(meResponse.data.user);
         setShowPlans(false);
         return;
       }
@@ -533,12 +556,16 @@ function App() {
         theme: { color: "#6d5dfc" },
         handler: async (payment) => {
           await api.post("/payments/verify/", {
-            attempt_id: resultState.attempt.id,
+            attempt_id: orderAttemptId,
             razorpay_order_id: payment.razorpay_order_id,
             razorpay_payment_id: payment.razorpay_payment_id,
             razorpay_signature: payment.razorpay_signature,
           });
-          await refreshResults(resultState.attempt.id);
+          if (orderAttemptId) {
+            await refreshResults(orderAttemptId);
+          }
+          const meResponse = await api.get("/auth/me/");
+          setCurrentUser(meResponse.data.user);
           setShowPlans(false);
         },
       });
@@ -548,7 +575,12 @@ function App() {
         setShowPlans(false);
         setShowAuthModal(true);
       }
-      setError(unlockError.response?.data?.message || unlockError.message || "Payment could not be completed.");
+      setError(
+        unlockError.response?.data?.message
+          || unlockError.response?.data?.custom_days?.[0]
+          || unlockError.message
+          || "Payment could not be completed."
+      );
     } finally {
       setUnlocking(false);
     }
@@ -567,10 +599,9 @@ function App() {
           <button
             type="button"
             onClick={() => scrollToSection("home")}
-            className="min-w-0 text-left"
+            className="min-w-0 shrink text-left"
           >
-            <div className="text-xs font-semibold tracking-[0.32em] text-cyan-100">GATE ADVISOR</div>
-            <div className="mt-1 hidden text-xs text-slate-300/70 sm:block">Admission guidance portal</div>
+            <BrandLogo />
           </button>
 
           <div className="hidden items-center gap-3 md:flex">
@@ -606,7 +637,7 @@ function App() {
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className="secondary-button min-h-0 px-3 py-2 text-sm md:hidden"
+            className="secondary-button min-h-0 shrink-0 px-3 py-2 text-sm md:hidden"
             aria-label="Open menu"
           >
             Menu
@@ -656,9 +687,14 @@ function App() {
                   <div className="font-medium text-white">{currentUser.full_name}</div>
                   <div className="mt-1 text-xs text-slate-300/70">{currentUser.email}</div>
                   {currentUser.subscription ? (
-                    <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100">
-                      {currentUser.subscription.plan_code} plan active
-                    </div>
+                    <>
+                      <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-100">
+                        {currentUser.subscription.plan_code} plan active till {formatSubscriptionDate(currentUser.subscription.expires_at)}
+                      </div>
+                      <button onClick={handleSubscriptionCta} className="secondary-button mt-4 w-full justify-center">
+                        View Subscription
+                      </button>
+                    </>
                   ) : (
                     <button onClick={handleSubscriptionCta} className="primary-button mt-4 w-full justify-center">
                       Buy Subscription
@@ -756,7 +792,7 @@ function App() {
               Saved filters and results stay on this device until logout.
             </div>
             <button onClick={handleSubscriptionCta} className="secondary-button w-full justify-center">
-              {currentUser?.subscription ? "Manage Subscription" : "Buy Subscription"}
+              {currentUser?.subscription ? "View Subscription" : "Buy Subscription"}
             </button>
           </div>
         </div>
@@ -783,6 +819,8 @@ function App() {
       ) : null}
       {showPlans ? (
         <PlanModal
+          activeSubscription={currentUser?.subscription || null}
+          customDailyPricePaise={metadata.custom_subscription_daily_price_paise || fallbackMetadata.custom_subscription_daily_price_paise}
           plans={metadata.subscription_plans || fallbackMetadata.subscription_plans}
           unlocking={unlocking}
           onClose={() => setShowPlans(false)}
@@ -1219,17 +1257,28 @@ function AuthModal({
   );
 }
 
-function PlanModal({ plans, unlocking, onClose, onSelectPlan }) {
+function PlanModal({ activeSubscription, customDailyPricePaise, plans, unlocking, onClose, onSelectPlan }) {
+  const [customDays, setCustomDays] = useState("30");
+  const parsedCustomDays = Number(customDays);
+  const customDaysValid = Number.isInteger(parsedCustomDays) && parsedCustomDays > 0;
+  const customAmount = customDaysValid ? (parsedCustomDays * customDailyPricePaise) / 100 : 0;
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#020817]/75 px-4 py-4 backdrop-blur-md sm:px-5 sm:py-6">
       <div className="flex min-h-full items-start justify-center sm:items-center">
         <div className="glass-panel my-4 max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto rounded-[2rem] p-5 sm:max-h-[calc(100vh-3rem)] sm:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">Unlock full list</p>
-              <h3 className="mt-2 text-3xl font-semibold">Choose your access plan</h3>
+              <p className="text-sm uppercase tracking-[0.28em] text-cyan-100/80">
+                {activeSubscription ? "View subscription" : "Unlock full list"}
+              </p>
+              <h3 className="mt-2 text-3xl font-semibold">
+                {activeSubscription ? "Manage or extend your subscription" : "Choose your access plan"}
+              </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200/70">
-                Weekly and yearly plans carry the current discount. Monthly stays at the regular price.
+                {activeSubscription
+                  ? "Extend your current access with a standard plan or add a custom number of days."
+                  : "Weekly and yearly plans carry the current discount. Monthly stays at the regular price."}
               </p>
             </div>
             <button onClick={onClose} className="secondary-button shrink-0" disabled={unlocking}>
@@ -1237,7 +1286,19 @@ function PlanModal({ plans, unlocking, onClose, onSelectPlan }) {
             </button>
           </div>
 
-          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+          {activeSubscription ? (
+            <div className="mt-6 rounded-[2rem] border border-emerald-300/20 bg-emerald-300/10 p-5">
+              <div className="text-xs uppercase tracking-[0.2em] text-emerald-100/85">Current subscription</div>
+              <div className="mt-2 text-xl font-semibold text-white">
+                {activeSubscription.plan_code} plan active
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-100/80">
+                Active till {formatSubscriptionDate(activeSubscription.expires_at)}. Any new purchase will extend from your current expiry.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
             {plans.map((plan) => (
               <div
                 key={plan.code}
@@ -1289,10 +1350,60 @@ function PlanModal({ plans, unlocking, onClose, onSelectPlan }) {
                   className="primary-button mt-8 w-full justify-center"
                   disabled={unlocking}
                 >
-                  {unlocking ? "Starting payment..." : `Continue with ${plan.title}`}
+                  {unlocking
+                    ? "Starting payment..."
+                    : activeSubscription
+                      ? `Extend with ${plan.title}`
+                      : `Continue with ${plan.title}`}
                 </button>
               </div>
             ))}
+
+            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xl font-semibold">Custom days</h4>
+                  <p className="mt-1 text-sm text-slate-200/70">Add exactly the duration you want.</p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200/70">
+                  Rs 5/day
+                </span>
+              </div>
+
+              <div className="mt-6">
+                <label className="field">
+                  <span>Number of days</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={customDays}
+                    onChange={(event) => setCustomDays(event.target.value)}
+                    placeholder="Enter days"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 rounded-3xl border border-white/10 bg-black/10 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-300/70">Amount payable</div>
+                <div className="mt-2 text-3xl font-semibold text-white">
+                  {formatRupees(customAmount)}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-200/70">
+                  {customDaysValid
+                    ? `${parsedCustomDays} day${parsedCustomDays === 1 ? "" : "s"} x Rs 5 per day`
+                    : "Enter a valid number of days to continue."}
+                </p>
+              </div>
+
+              <button
+                onClick={() => onSelectPlan("custom", parsedCustomDays)}
+                className="primary-button mt-8 w-full justify-center"
+                disabled={unlocking || !customDaysValid}
+              >
+                {unlocking ? "Starting payment..." : activeSubscription ? "Add Custom Days" : "Continue with Custom Days"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1307,7 +1418,9 @@ function InfoPage({ page }) {
       <div className="ambient ambient-two" />
       <section className="relative mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-10">
         <nav className="glass-panel flex items-center justify-between rounded-full px-5 py-3">
-          <span className="text-sm font-semibold tracking-[0.32em] text-cyan-100">GATE ADVISOR</span>
+          <div className="min-w-0 shrink">
+            <BrandLogo compact />
+          </div>
           <a href="/" className="secondary-button">
             Back to Home
           </a>
