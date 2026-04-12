@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, loadRazorpayScript, setAuthToken } from "./lib/api";
 import gateAdvisorLogo from "./assets/gate-advisor-logo.jpeg";
+import AdminApp from "./AdminApp";
 
 const fallbackMetadata = {
   branches: [
@@ -584,6 +585,10 @@ function App() {
     } finally {
       setUnlocking(false);
     }
+  }
+
+  if (pathname.startsWith("/admin")) {
+    return <AdminApp />;
   }
 
   if (activeInfoPage) {

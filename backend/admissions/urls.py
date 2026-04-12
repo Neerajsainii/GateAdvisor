@@ -9,6 +9,8 @@ from .views import (
     ResultsPreviewView,
     SignupView,
     VerifyPaymentView,
+    AdminLoginView,
+    AdminDashboardView,
     guidance,
     health,
     metadata,
@@ -29,4 +31,6 @@ urlpatterns = [
     path("payments/create-order/", CreateOrderView.as_view()),
     path("payments/verify/", VerifyPaymentView.as_view()),
     path("payments/razorpay/webhook/", razorpay_webhook),
+    path("auth/admin-login/", AdminLoginView.as_view()),
+    path("admin/users/", AdminDashboardView.as_view()),
 ]

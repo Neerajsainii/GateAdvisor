@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from .models import ApplicantSession, Payment
 from .serializers import (
+    AdminLoginSerializer,
     CreateOrderSerializer,
     LoginSerializer,
     PreviewRequestSerializer,
@@ -266,3 +267,54 @@ def razorpay_webhook(request):
             ApplicantSession.objects.filter(id=payment.applicant_session_id).update(is_paid=True)
 
     return JsonResponse({"ok": True})
+
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
+class AdminLoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = AdminLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({"token": token.key, "user": serialize_user(user)})
+
+
+class AdminDashboardView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.filter(is_superuser=False).order_by("-date_joined")
+        dashboard_data = []
+
+        now = timezone.now()
+
+        for user in users:
+            active_sub = active_subscription_for_user(user)
+            has_subscription = active_sub is not None
+            subscription_type = active_sub["plan_code"].capitalize() if active_sub else "None"
+            
+            duration_remaining = ""
+            if has_subscription:
+                expires_at = active_sub["expires_at"]
+                delta = expires_at - now
+                if delta.days > 30:
+                    duration_remaining = f"{delta.days // 30} months"
+                elif delta.days > 0:
+                    duration_remaining = f"{delta.days} days"
+                else:
+                    duration_remaining = "< 1 day"
+
+            dashboard_data.append({
+                "id": str(user.id),
+                "full_name": user.first_name or user.get_full_name() or user.username,
+                "email": user.email,
+                "has_subscription": "Yes" if has_subscription else "No",
+                "subscription_type": subscription_type,
+                "duration_remaining": duration_remaining,
+            })
+
+        return Response({"users": dashboard_data})
