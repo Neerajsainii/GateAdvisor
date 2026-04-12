@@ -28,6 +28,12 @@ export default function AdminApp() {
   const [users, setUsers] = useState([]);
   const [fetchingUsers, setFetchingUsers] = useState(false);
 
+  const handleLogout = useCallback(() => {
+    setToken("");
+    setAuthToken("");
+    setUsers([]);
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     setFetchingUsers(true);
     try {
@@ -64,12 +70,6 @@ export default function AdminApp() {
       setLoading(false);
     }
   }
-
-  const handleLogout = useCallback(() => {
-    setToken("");
-    setAuthToken("");
-    setUsers([]);
-  }, []);
 
   if (!token) {
     return (
