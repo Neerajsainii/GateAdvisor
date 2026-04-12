@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, setAuthToken, AUTH_TOKEN_STORAGE_KEY } from "./lib/api";
 
@@ -28,14 +28,7 @@ export default function AdminApp() {
   const [users, setUsers] = useState([]);
   const [fetchingUsers, setFetchingUsers] = useState(false);
 
-  useEffect(() => {
-    setAuthToken(token);
-    if (token) {
-      fetchUsers();
-    }
-  }, [token]);
-
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     setFetchingUsers(true);
     try {
       const response = await api.get("/admin/users/");
@@ -49,7 +42,14 @@ export default function AdminApp() {
     } finally {
       setFetchingUsers(false);
     }
-  }
+  }, [handleLogout]);
+
+  useEffect(() => {
+    setAuthToken(token);
+    if (token) {
+      fetchUsers();
+    }
+  }, [token, fetchUsers]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -65,11 +65,11 @@ export default function AdminApp() {
     }
   }
 
-  function handleLogout() {
+  const handleLogout = useCallback(() => {
     setToken("");
     setAuthToken("");
     setUsers([]);
-  }
+  }, []);
 
   if (!token) {
     return (
